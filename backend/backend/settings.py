@@ -116,6 +116,14 @@ SPECTACULAR_SETTINGS = {
     'SERVE_INCLUDE_SCHEMA': False,
 }
 
+CELERY_BEAT_SCHEDULE = {
+    'check-pending-transactions': {
+        'task': 'apps.wallet.tasks.check_pending_transactions',
+        'schedule': 300.0,  # Every 5 minutes
+    },
+}
+
+
 CORS_ALLOW_ALL_ORIGINS=True
 
 CHANNEL_LAYERS = {
@@ -129,6 +137,10 @@ CHANNEL_LAYERS = {
 
 CELERY_BROKER_URL = 'redis://localhost:6379/0'
 CELERY_RESULT_BACKEND = 'redis://localhost:6379/0'
+CELERY_ACCEPT_CONTENT = ['json']
+CELERY_TASK_SERIALIZER = 'json'
+CELERY_RESULT_SERIALIZER = 'json'
+CELERY_TIMEZONE = 'UTC'
 
 # Currency Settings
 CURRENCIES = ('NGN', 'USD', 'KES', 'GHS')
@@ -137,11 +149,14 @@ CURRENCY_CHOICES = [('NGN', 'Naira'), ('USD', 'US Dollar')]
 # Payment Settings
 PAYMENT_PROVIDER = os.getenv('PAYMENT_PROVIDER', 'paystack')
 PAYSTACK_SECRET_KEY = os.getenv('PAYSTACK_SECRET_KEY', '')
+PAYSTACK_PUBLIC_KEY = os.getenv('PAYSTACK_PUBLIC_KEY', '')
 MONNIFY_API_KEY = os.getenv('MONNIFY_API_KEY', '')
 
 # KYC Settings
 KYC_THRESHOLD = os.getenv('KYC_THRESHOLD', default=50000)  # 50,000 in cents
 
+WITHDRAWAL_MIN_AMOUNT = 100  # Minimum withdrawal amount in Naira
+WITHDRAWAL_KYC_THRESHOLD = 50000  # Amount requiring KYC verification
 
 WSGI_APPLICATION = 'backend.wsgi.application'
 

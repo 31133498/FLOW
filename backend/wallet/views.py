@@ -7,8 +7,9 @@ import uuid
 from .models import WalletTransaction, BankAccount, EscrowLedger
 from .serializers import (
     WalletTransactionSerializer, BankAccountSerializer, 
-    WithdrawalRequestSerializer, DepositRequestSerializer
+    WithdrawalRequestSerializer, DepositRequestSerializer, BankVerificationSerializer
 )
+from .tasks import process_withdrawal, process_escrow_funding, verify_bank_account
 from projects.models import EnterpriseProject
 
 class WalletTransactionListView(generics.ListAPIView):
@@ -26,7 +27,17 @@ class BankAccountListView(generics.ListCreateAPIView):
         return BankAccount.objects.filter(user=self.request.user)
     
     def perform_create(self, serializer):
-        serializer.save(user=self.request.user)
+        bank_account = serializer.save(user=self.request.user)
+        
+        # Trigger bank account verification
+        verify_bank_account.delay(bank_account.id)
+
+class BankAccountDetailView(generics.RetrieveUpdateDestroyAPIView):
+    serializer_class = BankAccountSerializer
+    permission_classes = (permissions.IsAuthenticated,)
+    
+    def get_queryset(self):
+        return BankAccount.objects.filter(user=self.request.user)
 
 @api_view(['POST'])
 @permission_classes([permissions.IsAuthenticated])
@@ -58,26 +69,26 @@ def request_withdrawal(request):
             metadata={
                 'bank_account_id': bank_account.id,
                 'bank_name': bank_account.bank_name,
-                'account_number': bank_account.account_number
+                'account_number': bank_account.account_number,
+                'account_name': bank_account.account_name
             }
         )
         
-        # Deduct from user's wallet
-        user.wallet_balance -= data['amount']
-        user.save()
-        
-        # Process withdrawal via payment provider (async)
-        from .tasks import process_withdrawal
+        # Process withdrawal via Celery task
         process_withdrawal.delay(withdrawal.id)
     
     return Response({
         "message": "Withdrawal request submitted",
-        "transaction_reference": transaction_ref
+        "transaction_reference": transaction_ref,
+        "transaction_id": withdrawal.id
     })
 
 @api_view(['POST'])
 @permission_classes([permissions.IsAuthenticated])
 def fund_escrow(request):
+    """
+    Fund project escrow using Paystack
+    """
     serializer = DepositRequestSerializer(data=request.data)
     serializer.is_valid(raise_exception=True)
     
@@ -100,30 +111,129 @@ def fund_escrow(request):
                 status=status.HTTP_404_NOT_FOUND
             )
     else:
-        # General escrow funding
-        project = None
+        return Response(
+            {"error": "Project ID is required for escrow funding"}, 
+            status=status.HTTP_400_BAD_REQUEST
+        )
     
-    # In a real implementation, this would initiate a payment with Paystack/Monnify
-    # For MVP, we'll simulate successful payment
+    if project.escrow_locked:
+        return Response(
+            {"error": "Project already funded"}, 
+            status=status.HTTP_400_BAD_REQUEST
+        )
     
+    # Create transaction reference
     transaction_ref = f"ESC{uuid.uuid4().hex[:12].upper()}"
     
-    # Create escrow ledger entry
-    escrow_entry = EscrowLedger.objects.create(
-        project=project,
+    # Create wallet transaction for tracking
+    wallet_transaction = WalletTransaction.objects.create(
+        user=user,
         amount=data['amount'],
-        transaction_type='funding',
+        transaction_type='escrow_funding',
+        status='processing',
         reference=transaction_ref,
-        metadata={'user_id': user.id}
+        metadata={'project_id': project.id}
     )
     
-    if project:
-        project.escrow_locked = True
-        project.status = 'active'
-        project.save()
+    # Process escrow funding via Celery task
+    process_escrow_funding.delay(project.id, data['amount'], transaction_ref)
     
     return Response({
-        "message": "Escrow funded successfully",
+        "message": "Escrow funding initiated",
         "reference": transaction_ref,
-        "escrow_entry_id": escrow_entry.id
+        "project_id": project.id
     })
+
+@api_view(['POST'])
+@permission_classes([permissions.IsAuthenticated])
+def verify_bank_account_view(request):
+    """
+    Manually trigger bank account verification
+    """
+    serializer = BankVerificationSerializer(data=request.data)
+    serializer.is_valid(raise_exception=True)
+    
+    data = serializer.validated_data
+    
+    try:
+        bank_account = BankAccount.objects.get(
+            account_number=data['account_number'],
+            bank_code=data['bank_code'],
+            user=request.user
+        )
+        
+        # Trigger verification
+        verify_bank_account.delay(bank_account.id)
+        
+        return Response({
+            "message": "Bank account verification initiated",
+            "bank_account_id": bank_account.id
+        })
+        
+    except BankAccount.DoesNotExist:
+        return Response(
+            {"error": "Bank account not found"}, 
+            status=status.HTTP_404_NOT_FOUND
+        )
+
+@api_view(['GET'])
+@permission_classes([permissions.IsAuthenticated])
+def wallet_summary(request):
+    """
+    Get wallet summary including balance and recent transactions
+    """
+    user = request.user
+    
+    summary = {
+        'balance': user.wallet_balance,
+        'total_earned': WalletTransaction.objects.filter(
+            user=user,
+            transaction_type='task_payment',
+            status='completed'
+        ).aggregate(total=models.Sum('amount'))['total'] or 0,
+        'total_withdrawn': WalletTransaction.objects.filter(
+            user=user,
+            transaction_type='withdrawal',
+            status='completed'
+        ).aggregate(total=models.Sum('amount'))['total'] or 0,
+        'pending_withdrawals': WalletTransaction.objects.filter(
+            user=user,
+            transaction_type='withdrawal',
+            status__in=['pending', 'processing']
+        ).aggregate(total=models.Sum('amount'))['total'] or 0,
+        'recent_transactions': WalletTransactionSerializer(
+            WalletTransaction.objects.filter(user=user)[:5],
+            many=True
+        ).data
+    }
+    
+    return Response(summary)
+
+@api_view(['GET'])
+@permission_classes([permissions.IsAuthenticated])
+def get_supported_banks(request):
+    """
+    Get list of supported banks from Paystack
+    """
+    from .paystack_client import paystack_client
+    
+    banks_response = paystack_client.list_banks()
+    
+    if banks_response.get('status'):
+        banks = [
+            {
+                'name': bank['name'],
+                'code': bank['code'],
+                'id': bank['id']
+            }
+            for bank in banks_response['data']
+        ]
+        return Response(banks)
+    else:
+        return Response(
+            {"error": "Failed to fetch banks list"}, 
+            status=status.HTTP_500_INTERNAL_SERVER_ERROR
+        )
+
+# Add the missing import for models
+from django.db import models

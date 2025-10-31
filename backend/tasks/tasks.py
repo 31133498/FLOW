@@ -3,8 +3,8 @@ from django.db import transaction
 from django.utils import timezone
 import random
 from .models import TaskUnit, TaskValidation
-from apps.wallet.models import WalletTransaction
-from apps.users.models import User
+from wallet.models import WalletTransaction
+from users.models import User
 
 @shared_task
 def atomize_project_tasks(project_id):
@@ -12,7 +12,7 @@ def atomize_project_tasks(project_id):
     Atomize a project into individual task units
     This is a simplified version - in production, this would use ML/models
     """
-    from apps.projects.models import EnterpriseProject
+    from projects.models import EnterpriseProject
     
     try:
         project = EnterpriseProject.objects.get(id=project_id)
@@ -154,6 +154,7 @@ def complete_task(task_id):
             student.save()
             
             # Create wallet transaction
+            from apps.wallet.models import WalletTransaction
             WalletTransaction.objects.create(
                 user=student,
                 amount=task.pay_amount,
@@ -163,13 +164,51 @@ def complete_task(task_id):
                 metadata={'task_id': task.id, 'project_id': task.project.id}
             )
             
+            # Release escrow funds
+            from apps.wallet.tasks import release_escrow_funds
+            release_escrow_funds.delay(task.id)
+            
             # Update project progress
             project = task.project
             project.completed_units += 1
             project.save()
             
+            # Update student reputation
+            update_student_reputation.delay(student.id)
+            
         except TaskUnit.DoesNotExist:
             pass
+
+@shared_task
+def update_student_reputation(student_id):
+    """
+    Update student reputation based on completed tasks
+    """
+    from users.models import User
+    try:
+        student = User.objects.get(id=student_id)
+        completed_tasks = TaskUnit.objects.filter(
+            assigned_to=student,
+            status='completed'
+        ).count()
+        
+        # Simple reputation calculation
+        base_reputation = 3.0  # Starting point
+        task_bonus = min(completed_tasks * 0.1, 2.0)  # Max 2.0 bonus
+        student.reputation_score = base_reputation + task_bonus
+        
+        # Update tier based on reputation
+        if student.reputation_score >= 4.5:
+            student.tier = 3
+        elif student.reputation_score >= 3.5:
+            student.tier = 2
+        else:
+            student.tier = 1
+            
+        student.save()
+        
+    except User.DoesNotExist:
+        pass
 
 def simulate_ai_verification(task):
     """
