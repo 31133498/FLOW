@@ -154,7 +154,7 @@ def complete_task(task_id):
             student.save()
             
             # Create wallet transaction
-            from apps.wallet.models import WalletTransaction
+            from wallet.models import WalletTransaction
             WalletTransaction.objects.create(
                 user=student,
                 amount=task.pay_amount,
@@ -165,7 +165,7 @@ def complete_task(task_id):
             )
             
             # Release escrow funds
-            from apps.wallet.tasks import release_escrow_funds
+            from wallet.tasks import release_escrow_funds
             release_escrow_funds.delay(task.id)
             
             # Update project progress
