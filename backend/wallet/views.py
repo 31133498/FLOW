@@ -9,7 +9,7 @@ from .serializers import (
     WalletTransactionSerializer, BankAccountSerializer, 
     WithdrawalRequestSerializer, DepositRequestSerializer
 )
-from apps.projects.models import EnterpriseProject
+from projects.models import EnterpriseProject
 
 class WalletTransactionListView(generics.ListAPIView):
     serializer_class = WalletTransactionSerializer
