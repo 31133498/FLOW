@@ -1,4 +1,4 @@
-from django.contrib.auth.models import AbstractUser
+from django.contrib.auth.models import AbstractUser, Group, Permission
 from django.db import models
 from djmoney.models.fields import MoneyField
 
@@ -23,6 +23,9 @@ class User(AbstractUser):
     is_verified = models.BooleanField(default=False)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
+    
+    groups = models.ManyToManyField(Group, related_name='user_realted_groups')
+    user_permissions = models.ManyToManyField(Permission, related_name='user_related_permissions')
     
     def __str__(self):
         return f"{self.username} ({self.role})"

@@ -49,12 +49,12 @@ INSTALLED_APPS = [
     'channels',
     
     # Local apps
-    'apps.users',
-    'apps.wallet',
-    'apps.projects',
-    'apps.tasks',
-    'apps.verification',
-    'apps.admin_dashboard',
+    'users',
+    'wallet',
+    'projects',
+    'tasks',
+    'verification',
+    'admin_dashboard',
 ]
 
 MIDDLEWARE = [
@@ -108,6 +108,14 @@ SIMPLE_JWT = {
     'BLACKLIST_AFTER_ROTATION': True,
 }
 
+# Spectacular Settings
+SPECTACULAR_SETTINGS = {
+    'TITLE': 'Rapid Scaffolder API',
+    'DESCRIPTION': 'Build production-ready APIs in minutes, not days.',
+    'VERSION': '1.0.0',
+    'SERVE_INCLUDE_SCHEMA': False,
+}
+
 CORS_ALLOW_ALL_ORIGINS=True
 
 CHANNEL_LAYERS = {
@@ -132,7 +140,7 @@ PAYSTACK_SECRET_KEY = os.getenv('PAYSTACK_SECRET_KEY', '')
 MONNIFY_API_KEY = os.getenv('MONNIFY_API_KEY', '')
 
 # KYC Settings
-KYC_THRESHOLD = os.getenv('KYC_THRESHOLD', default=50000, cast=int)  # 50,000 in cents
+KYC_THRESHOLD = os.getenv('KYC_THRESHOLD', default=50000)  # 50,000 in cents
 
 
 WSGI_APPLICATION = 'backend.wsgi.application'
@@ -192,6 +200,9 @@ USE_TZ = True
 # https://docs.djangoproject.com/en/4.2/howto/static-files/
 
 STATIC_URL = 'static/'
+
+MEDIA_URL = '/media/'
+MEDIA_ROOT = os.path.join(BASE_DIR, 'media')
 
 # Default primary key field type
 # https://docs.djangoproject.com/en/4.2/ref/settings/#default-auto-field
