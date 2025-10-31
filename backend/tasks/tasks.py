@@ -7,6 +7,44 @@ from wallet.models import WalletTransaction
 from users.models import User
 
 @shared_task
+def check_validation_consensus(task_id):
+    """
+    Check if we have enough validations to reach consensus
+    """
+    try:
+        task = TaskUnit.objects.get(id=task_id)
+        validations = TaskValidation.objects.filter(task_unit=task)
+        
+        total_validations = validations.count()
+        approved_count = validations.filter(status='approved').count()
+        rejected_count = validations.filter(status='rejected').count()
+        
+        # Get required consensus from verification metadata
+        required_consensus = task.verification_metadata.get('peer_count', 2)
+        required_approvals = task.verification_metadata.get('required_approvals', 1)
+        
+        if total_validations >= required_consensus:
+            if approved_count >= required_approvals:
+                # Consensus reached - approve task
+                complete_task(task.id)
+            else:
+                # Consensus failed - mark as disputed
+                task.status = 'disputed'
+                task.save()
+                
+                # Create system alert for admin
+                from admin_dashboard.models import SystemAlert
+                SystemAlert.objects.create(
+                    title=f'Task Disputed - #{task.id}',
+                    description=f'Task {task.title} failed peer consensus validation',
+                    alert_type='verification_failure',
+                    severity='medium'
+                )
+                
+    except TaskUnit.DoesNotExist:
+        pass
+
+@shared_task
 def atomize_project_tasks(project_id):
     """
     Atomize a project into individual task units

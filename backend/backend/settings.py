@@ -53,7 +53,6 @@ INSTALLED_APPS = [
     'wallet',
     'projects',
     'tasks',
-    'verification',
     'admin_dashboard',
 ]
 

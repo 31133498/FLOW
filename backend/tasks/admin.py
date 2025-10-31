@@ -3,11 +3,14 @@ from .models import TaskUnit, TaskSubmission, PhysicalVerification, TaskValidati
 
 @admin.register(TaskUnit)
 class TaskUnitAdmin(admin.ModelAdmin):
-    list_display = ('title', 'project', 'type', 'status', 'assigned_to', 'pay_amount', 'created_at')
+    list_display = ('title', 'project', 'type', 'status', 'assigned_to', 'pay_amount', 'verification_strategy', 'created_at')
     list_filter = ('status', 'type', 'verification_strategy', 'created_at')
     search_fields = ('title', 'project__title', 'assigned_to__username')
     readonly_fields = ('created_at', 'assigned_at', 'submitted_at', 'completed_at')
-
+    
+    def get_queryset(self, request):
+        return super().get_queryset(request).select_related('project', 'assigned_to')
+    
 @admin.register(TaskSubmission)
 class TaskSubmissionAdmin(admin.ModelAdmin):
     list_display = ('task_unit', 'submitted_by', 'submitted_at')
@@ -22,6 +25,10 @@ class PhysicalVerificationAdmin(admin.ModelAdmin):
 
 @admin.register(TaskValidation)
 class TaskValidationAdmin(admin.ModelAdmin):
-    list_display = ('task_unit', 'validator', 'status', 'created_at')
+    list_display = ('task_unit', 'validator', 'status', 'created_at', 'updated_at')
     list_filter = ('status', 'created_at')
     search_fields = ('task_unit__title', 'validator__username')
+    readonly_fields = ('created_at', 'updated_at')
+    
+    def get_queryset(self, request):
+        return super().get_queryset(request).select_related('task_unit', 'validator')

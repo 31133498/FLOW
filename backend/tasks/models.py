@@ -53,6 +53,30 @@ class TaskUnit(models.Model):
     
     def __str__(self):
         return f"Unit {self.unit_index} - {self.project.title}"
+    
+    @property
+    def requires_physical_verification(self):
+        """Check if this task requires physical verification"""
+        return self.type in ['physical', 'hybrid']
+    
+    @property
+    def verification_required(self):
+        """Check if verification is pending"""
+        return self.status in ['submitted', 'verifying']
+    
+    def can_be_validated_by(self, user):
+        """Check if user can validate this task"""
+        if user == self.assigned_to:
+            return False  # Can't validate own task
+        if user.role != 'student':
+            return False
+        if not user.is_verified:
+            return False
+        # Check if user is already validating this task
+        return not TaskValidation.objects.filter(
+            task_unit=self, 
+            validator=user
+        ).exists()
 
 class TaskSubmission(models.Model):
     task_unit = models.OneToOneField(TaskUnit, on_delete=models.CASCADE, related_name='submission_details')
@@ -99,3 +123,17 @@ class TaskValidation(models.Model):
     
     def __str__(self):
         return f"Validation by {self.validator.username} for {self.task_unit}"
+    
+    
+    @property
+    def is_approved(self):
+        return self.status == 'approved'
+    
+    @property
+    def is_rejected(self):
+        return self.status == 'rejected'
+    
+    class Meta:
+        # ... existing meta ...
+        verbose_name = 'Task Validation'
+        verbose_name_plural = 'Task Validations'
