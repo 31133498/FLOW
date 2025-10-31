@@ -21,14 +21,15 @@ from django.conf.urls.static import static
 from drf_spectacular.views import (
     SpectacularAPIView,
     SpectacularRedocView,
-    SpectacularSwaggerView
+    SpectacularSwaggerView,
 )
 
 urlpatterns = [
     path('admin/', admin.site.urls),
-    path('',SpectacularAPIView.as_view(), name='spectacular view'),
-    path('api/schema', SpectacularSwaggerView.as_view(), name='swagger-ui'),
-    
+    path('api/schema/', SpectacularAPIView.as_view(), name='schema'),
+    path('api/schema/swagger-ui/', SpectacularSwaggerView.as_view(url_name='schema'), name='swagger-ui'),
+    path('api/schema/redoc/', SpectacularRedocView.as_view(url_name='schema'), name='redoc'),
+
     path('api/auth/', include("users.urls")),
     path('api/projects/', include("projects.urls")),
     path('api/tasks/', include("tasks.urls")),

@@ -1,25 +1,6 @@
-# Comprehensive Backend Testing Plan
+# TODO: Fix drf_spectacular settings
 
-## Overview
-Run comprehensive tests on the Django backend, focusing on Celery task processing with Redis as broker.
-
-## Steps
-- [ ] Start Redis server using provided command
-- [ ] Run Django migrations to ensure database is ready
-- [ ] Start Celery worker in background
-- [ ] Run existing Django tests
-- [ ] Create comprehensive Celery task tests
-- [ ] Run new Celery tests
-- [ ] Test task execution via API calls
-- [ ] Verify Redis connectivity and task queuing
-- [ ] Stop Celery worker and Redis server
-- [ ] Generate test report
-
-## Files to Create/Modify
-- backend/tasks/tests.py - Add Celery task tests
-- backend/wallet/tests.py - Add wallet Celery task tests
-
-## Dependencies
-- Redis server running on localhost:6379
-- Celery worker process
-- Django test runner
+- [x] Add 'drf_spectacular' to INSTALLED_APPS in backend/backend/settings.py
+- [x] Add 'DEFAULT_SCHEMA_CLASS': 'drf_spectacular.openapi.AutoSchema' to REST_FRAMEWORK in backend/backend/settings.py
+- [x] Rename SpectacularAPIView to 'schema' in backend/backend/urls.py
+- [x] Add SpectacularRedocView to backend/backend/urls.py
